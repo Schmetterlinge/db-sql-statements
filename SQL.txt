@@ -1,0 +1,197 @@
+// SELECT QUERIES
+
+1. Display the name of the student with identified by 5.
+
+SELECT student_name FROM students WHERE student_id = 5;
+
+2. Display the names of subjects starting with C.
+
+SELECT subject_name FROM subjects WHERE subject_name LIKE 'C%';
+
+3. Display the names of students majoring in ROBOTICS.
+
+SELECT students.student_name FROM students 
+INNER JOIN majors ON students.major_id = majors.major_id 
+WHERE majors.major_name = 'ROBOTICS';
+
+4. Display in alphabetical order the names of female students, who have grade 2 in any subject.
+
+SELECT students.student_name FROM students 
+INNER JOIN grades ON grades.STUDENT_ID = students.STUDENT_ID
+WHERE grades.grade = 2 AND students.GENDER = 'F' ORDER BY students.student_name ASC;
+
+5. Prepare the list of lectures (subject with type=’Lecture’) given to COMPUTER CONSTRUCTION students.
+
+SELECT subjects.SUBJECT_NAME FROM subjects
+INNER JOIN subject_types ON subject_types.SUB_TYPE_ID = subjects.SUB_TYPE_ID
+INNER JOIN majors ON majors.MAJOR_ID = subjects.MAJOR_ID
+WHERE subject_types.SUB_TYPE_NAME = 'Lecture' AND majors.MAJOR_NAME = 'COMPUTER CONSTRUCTION';
+
+6. Display in reverse alphabetical order the names of male students who are in major PROCESS
+CONTROL or ELECTROTECHNOLOGY.
+
+SELECT students.student_name FROM students 
+INNER JOIN majors ON majors.MAJOR_ID = students.MAJOR_ID
+WHERE (majors.MAJOR_NAME = 'PROCESS CONTROL' OR majors.MAJOR_NAME = 'ELECTROTECHNOLOGY') 
+AND students.GENDER = 'M' ORDER BY students.student_name DESC;
+
+7. Display the names of subjects with their parent subjects.
+
+SELECT c.subject_name, p.subject_name FROM subjects c, subjects p 
+WHERE p.SUBJECT_ID = c.SUPER_SUB_ID;
+
+// AGGREGATION
+
+1. Display the names of subjects with at least one grade 2 given. The names mustn’t repeat.
+
+SELECT DISTINCT subjects.SUBJECT_NAME FROM subjects 
+INNER JOIN grades ON subjects.SUBJECT_ID = grades.SUBJECT_ID 
+WHERE grades.GRADE = 2;
+
+2. Display the number of COMPUTER SCIENCE students.
+
+SELECT COUNT(*) FROM students
+INNER JOIN majors ON majors.MAJOR_ID = students.MAJOR_ID
+WHERE majors.MAJOR_NAME = 'COMPUTER SCIENCE';
+
+3. Display an average of grades of student COLLEGE.
+
+SELECT AVG(grades.GRADE) FROM grades
+INNER JOIN students ON grades.STUDENT_ID = students.STUDENT_ID
+WHERE students.STUDENT_NAME = 'COLLEGE';
+
+4. Display a number of students of MINING MACHINERY major.
+
+SELECT COUNT(*) FROM students
+INNER JOIN majors ON majors.MAJOR_ID = students.MAJOR_ID
+WHERE majors.MAJOR_NAME = 'MINING MACHINERY';
+
+5. Display the lowest and the highest grade got by each student having name starting with ‘B’.
+
+SELECT students.STUDENT_ID, students.STUDENT_NAME, min(grades.GRADE), max(grades.GRADE) 
+FROM students
+INNER JOIN grades ON grades.STUDENT_ID = students.STUDENT_ID
+GROUP BY students.STUDENT_ID, students.STUDENT_NAME
+HAVING students.STUDENT_NAME LIKE 'B%';
+
+6. Display the number of different names of students of MINING MACHINERY major
+
+SELECT COUNT(DISTINCT students.STUDENT_NAME) FROM students
+INNER JOIN majors ON majors.MAJOR_ID = students.MAJOR_ID
+WHERE majors.MAJOR_NAME = 'MINING MACHINERY';
+
+7. For each major display the dates of birth of the oldest students.
+
+SELECT majors.MAJOR_ID, majors.MAJOR_NAME, min(students.DATE_OF_BIRTH) FROM majors
+NATURAL JOIN students
+GROUP BY majors.MAJOR_ID, majors.MAJOR_NAME;
+
+8. For each student with name starting with B display the number of grades that he or she
+got in each subject.
+
+SELECT students.STUDENT_NAME, subjects.SUBJECT_NAME, count(grades.GRADE) FROM students
+INNER JOIN grades ON grades.STUDENT_ID = students.STUDENT_ID 
+INNER JOIN subjects ON grades.SUBJECT_ID = subjects.SUBJECT_ID
+GROUP BY students.STUDENT_NAME, subjects.SUBJECT_NAME, grades.SUBJECT_ID
+HAVING students.STUDENT_NAME LIKE 'B%';
+
+9. Display the names of subjects which have more than 8 grades given.
+
+SELECT subjects.SUBJECT_NAME FROM subjects
+NATURAL JOIN grades
+GROUP BY subjects.SUBJECT_NAME, grades.SUBJECT_ID
+HAVING COUNT(*) > 8;
+
+10. For each student from SOFTWARE major display the number of subjects in which he or
+she has grades (number of subjects not the number of grades!).
+
+SELECT students.STUDENT_ID, students.STUDENT_NAME, COUNT(DISTINCT subjects.SUBJECT_ID) 
+FROM students
+INNER JOIN grades ON students.STUDENT_ID = grades.STUDENT_ID 
+INNER JOIN subjects ON grades.SUBJECT_ID = subjects.SUBJECT_ID 
+INNER JOIN majors ON majors.MAJOR_ID = students.MAJOR_ID 
+WHERE majors.MAJOR_NAME = 'SOFTWARE'
+GROUP BY students.STUDENT_ID, students.STUDENT_NAME 
+HAVING count(grades.GRADE) > 0;
+
+// NESTING
+
+1. Display the names of students who are younger than student CASAN.
+
+SELECT students.STUDENT_NAME FROM students
+WHERE students.DATE_OF_BIRTH > (SELECT students.DATE_OF_BIRTH FROM students WHERE students.STUDENT_NAME = 'CASAN');
+
+2. Display the names of students whose average of grades is higher than student HAT
+
+SELECT students.STUDENT_NAME FROM students
+NATURAL JOIN grades
+GROUP BY students.STUDENT_NAME
+HAVING AVG(grades.GRADE) > (SELECT AVG(grade) FROM grades NATURAL JOIN students WHERE students.STUDENT_NAME = 'HAT');
+
+3. Display the names of majors having more students than COMPUTER SCIENCE.
+
+SELECT majors.MAJOR_NAME FROM majors
+NATURAL JOIN students
+GROUP BY majors.MAJOR_NAME
+HAVING count(*) > (SELECT count(*) FROM students NATURAL JOIN majors WHERE majors.MAJOR_NAME = 'COMPUTER SCIENCE');
+
+4. For each employee with name starting with F or M letter display the number of all subjects
+for which she/he has classes. We are interested in the number of subjects not the number of classes!
+
+SELECT employees.EMP_NAME, count(DISTINCT subjects.SUBJECT_ID) FROM employees
+NATURAL JOIN schedules
+NATURAL JOIN subjects
+WHERE (employees.EMP_NAME LIKE 'F%' OR employees.EMP_NAME LIKE 'M%')
+GROUP BY employees.EMP_NAME;
+
+5. Display the name and the average grade of students who have grades in ALGEBRA subjects.
+We are interested in the average of all grades not just the grades from ALGEBRA!
+
+SELECT t.student_id, student_name, AVG(grade) from students t 
+INNER JOIN grades g ON t.student_id = g.student_id
+INNER JOIN subjects s ON s.subject_id = g.subject_id
+WHERE t.student_id IN (
+	SELECT student_id FROM grades g 
+	INNER JOIN subjects s ON g.SUBJECT_ID = s.subject_id
+	WHERE subject_name='ALGEBRA')
+GROUP BY t.student_id, student_name;
+
+6. Display names of subjects for which super_sub_id = 1, realized by the biggest number of
+employees. There may be more than one such subject!
+
+SELECT subjects.SUBJECT_ID, subjects.SUBJECT_NAME, COUNT(schedules.EMPLOYEE_ID) FROM subjects
+INNER JOIN employees
+INNER JOIN schedules ON schedules.SUBJECT_ID = subjects.SUBJECT_ID AND schedules.EMPLOYEE_ID = employees.EMPLOYEE_ID
+WHERE subjects.SUPER_SUB_ID = 1
+GROUP BY subjects.SUBJECT_ID, subjects.SUBJECT_NAME
+HAVING COUNT(schedules.EMPLOYEE_ID) = (SELECT MAX(m.value) AS maximum FROM (
+	SELECT COUNT(*) AS value FROM subjects
+	INNER JOIN employees
+	INNER JOIN schedules ON schedules.SUBJECT_ID = subjects.SUBJECT_ID AND schedules.EMPLOYEE_ID = employees.EMPLOYEE_ID
+	WHERE subjects.SUPER_SUB_ID = 1
+	GROUP BY subjects.SUBJECT_ID
+)m);
+
+7. Display names of employees who have a single payment lower than any payment of
+VOYTECKA employee.
+
+SELECT employees.EMPLOYEE_ID, employees.EMP_NAME FROM employees
+INNER JOIN salaries ON salaries.EMPLOYEE_ID = employees.EMPLOYEE_ID
+GROUP BY employees.EMPLOYEE_ID, employees.EMP_NAME
+HAVING MIN(salaries.AMOUNT) < ANY (
+	SELECT salaries.AMOUNT FROM salaries 
+	INNER JOIN employees ON employees.EMPLOYEE_ID = salaries.EMPLOYEE_ID
+	WHERE employees.EMP_NAME = 'VOYTECKA'
+	GROUP BY salaries.AMOUNT
+);	
+
+8. Display names of teams for which the oldest employee is younger than employee FRESH.
+
+SELECT teams.TEAM_NAME FROM teams
+INNER JOIN employees ON employees.TEAM_ID = teams.TEAM_ID
+GROUP BY teams.TEAM_NAME
+HAVING MIN(employees.DATE_OF_BIRTH) > (
+	SELECT employees.DATE_OF_BIRTH 
+	FROM employees 
+	WHERE employees.EMP_NAME = 'FRESH'
+);

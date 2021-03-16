@@ -1,0 +1,141 @@
+// Create new tables: teams1 and emp1
+CREATE TABLE `teams1` (
+  `TEAM_NAME` CHAR(30) NOT NULL,
+	`TEAM_ID` SMALLINT,
+	`MAN_ID` SMALLINT,
+	PRIMARY KEY (TEAM_ID)
+)
+ENGINE=InnoDB
+
+CREATE TABLE `emp1` (
+	`EMP_ID` SMALLINT,
+	`EMP_NAME` CHAR(15) NOT NULL,
+	`GENDER` CHAR(1),
+	`BIRTHDATE` DATETIME NOT NULL,
+	`TEAM_ID` SMALLINT,
+	PRIMARY KEY (EMP_ID)
+)
+ENGINE=InnoDB
+CREATE INDEX TEAM_INDEX ON teams1(TEAM_ID)
+
+// Inserting data to the tables
+INSERT INTO teams1 (TEAM_ID, TEAM_NAME, MAN_ID) 
+SELECT TEAM_ID, TEAM_NAME, MANAGER_ID
+FROM teams 
+
+INSERT INTO emp1 (EMP_ID, EMP_NAME, GENDER, BIRTHDATE, TEAM_ID) 
+SELECT EMPLOYEE_ID, EMP_NAME, GENDER, DATE_OF_BIRTH, TEAM_ID
+FROM employees
+
+// Modify tables
+ALTER TABLE teams1
+ADD CONSTRAINT FK_MANID
+FOREIGN KEY (MAN_ID) REFERENCES emp1(EMP_ID) ON DELETE RESTRICT;
+
+ALTER TABLE emp1
+ADD CONSTRAINT FK_ID
+FOREIGN KEY (TEAM_ID) REFERENCES teams1(TEAM_ID) ON DELETE SET NULL;
+
+// Check created integrity constraints in database
+INSERT INTO teams1 VALUES (NULL, NULL, NULL) -- not allowed because of primary key TEAM_ID
+DELETE FROM teams1 WHERE TEAM_ID = 1 -- allowed because of ON DELETE SET NULL
+UPDATE teams1 SET TEAM_ID = 100 WHERE TEAM_ID = 1 -- not allowed because this row has dependent row in another table 
+UPDATE teams1 SET MAN_ID = 500 WHERE TEAM_ID = 1 -- not allowed because this value doesn't exist in emp1 table
+UPDATE teams1 SET MAN_ID = 1 WHERE TEAM_ID = 1 -- allowed
+
+INSERT INTO emp1 VALUES (NULL, NULL, NULL, NULL, NULL) -- not allowed because of primary key EMP_ID
+DELETE FROM emp1 WHERE EMP_ID = 1 -- not allowed because of ON DELETE RESTRICT
+UPDATE emp1 SET EMP_ID = 100 WHERE EMP_ID = 1 -- not allowed because this row has dependent row in another table 
+UPDATE emp1 SET TEAM_ID = 100 WHERE EMP_ID = 1 -- not allowed because this value doesn't exist in teams1 table
+UPDATE emp1 SET TEAM_ID = 1 WHERE EMP_ID = 1 -- allowed
+
+// Creating users and granting them privileges
+CREATE USER 'user1'@'localhost' IDENTIFIED BY 'user1';
+GRANT SELECT ON employees TO 'user1'@'localhost';
+
+// Connect as user1:
+SELECT * from employees; -- shows all employees
+DROP TABLE employees; -- not allowed
+SELECT * from subjects; -- not allowed
+
+// Connect as root:
+GRANT DELETE ON teams TO 'user1'@'localhost';
+
+// Connect as user1:
+SELECT * FROM teams; -- not allowed, only delete privileges
+DELETE FROM teams WHERE TEAM_ID = 1; -- not allowed because we can't use SELECT
+
+// Connect as root:
+CREATE VIEW "vEmpInTeam" AS
+SELECT teams.TEAM_ID, teams.TEAM_NAME, COUNT(employees.EMPLOYEE_ID)
+FROM teams
+INNER JOIN employees ON employees.TEAM_ID = teams.TEAM_ID
+GROUP BY teams.TEAM_ID, teams.TEAM_NAME;
+GRANT SELECT on "vEmpInTeam" TO 'user1'@'localhost';
+
+// Connect as user1:
+SELECT * FROM "vEmpInTeam";
+SELECT * FROM employees;
+UPDATE "vEmpInTeam" SET EMPLOYEE_ID = 2 WHERE EMPLOYEE_ID = 1; -- not allowed as we don't have update privileges
+
+// Connect as root:
+GRANT UPDATE ON "vEmpInTeam" TO 'user1'@'localhost';
+
+// Connect as user1:
+UPDATE "vEmpInTeam" SET EMPLOYEE_ID = 2 WHERE EMPLOYEE_ID = 1; -- not working as we use the COUNT aggregate function
+
+// Connect as root:
+UPDATE "vEmpInTeam" SET EMPLOYEE_ID = 2 WHERE EMPLOYEE_ID = 1; -- not working as we use the COUNT aggregate function
+CREATE VIEW "vEMPS" AS SELECT employees.EMP_NAME from employees;
+
+// Connect as user1:
+UPDATE "vEMPS" SET EMP_NAME = 'Kamil' WHERE EMP_NAME = 'WOLF'; -- not allowed, as we don't have update permissions
+
+// Connect as root:
+GRANT SELECT, UPDATE ON "vEMPS" TO 'user1'@'localhost';
+
+// Connect as user1:
+UPDATE "vEMPS" SET EMP_NAME = 'Bartek' WHERE EMPLOYEE_ID = 3; -- not allowed, this view does not have access to EMPLOYEE_ID
+UPDATE "vEMPS" SET EMP_NAME = 'Kamil' WHERE EMP_NAME = 'WOLF'; -- allowed, we have both select and update permissions
+
+// Connect as root:
+CREATE USER 'secnd'@'localhost' IDENTIFIED BY 'secnd';
+GRANT SELECT ON subjects TO 'secnd'@'localhost';
+
+// Connect as secnd:
+SELECT * FROM subjects;
+GRANT SELECT ON subjects TO 'user1'@'localhost'; -- not allowed, we don't have GRANT privileges
+
+// Connect as root:
+GRANT SELECT ON subjects TO 'secnd'@'localhost' WITH GRANT OPTION;
+
+// Connect as secnd:
+GRANT SELECT ON subjects TO 'user1'@'localhost'; -- allowed as we have GRANT option
+
+// Connect as user1:
+SELECT * FROM subjects; -- allowed
+
+// Create view vNoWoman that displays teams which don’t employ any woman.
+CREATE VIEW "vNoWoman" AS
+SELECT DISTINCT teams.TEAM_NAME FROM teams 
+NATURAL JOIN employees
+WHERE employees.GENDER = 'M';
+
+// Create view vNumWomen that displays the number of women in teams. We are interested in all teams! 
+CREATE VIEW "vNumWomen" AS
+SELECT teams.TEAM_ID, teams.TEAM_NAME, COUNT(employees.EMPLOYEE_ID)
+FROM teams
+LEFT JOIN employees
+ON teams.TEAM_ID = employees.TEAM_ID AND employees.GENDER = 'F'
+GROUP BY teams.TEAM_ID, teams.TEAM_NAME;
+
+// Create view vSeniors that displays the names of the oldest employees in each team.
+CREATE VIEW "vSeniors" AS
+SELECT teams.TEAM_ID, teams.TEAM_NAME, employees.EMP_NAME FROM employees
+JOIN teams ON teams.TEAM_ID = employees.TEAM_ID AND employees.DATE_OF_BIRTH = ANY (
+	SELECT MIN(employees.DATE_OF_BIRTH)
+	FROM employees
+	INNER JOIN teams ON teams.TEAM_ID = employees.TEAM_ID
+	GROUP BY teams.TEAM_ID
+)
+GROUP BY teams.TEAM_ID, teams.TEAM_NAME, employees.EMP_NAME;
